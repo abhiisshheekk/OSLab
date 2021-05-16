@@ -13,6 +13,7 @@ int bg_processes = 0;
 int parallel_processes = 0;
 pid_t process_pid[100];
 pid_t bg_pid[100];
+
 /* Splits the string by space and returns the array of tokens
 *
 */
@@ -44,8 +45,8 @@ char **tokenize(char *line) {
 
 void killProcesses(pid_t processes[], int num_process)
 {
-	for (int i = 0; i < num_process; i++)
-	{
+	for (int i = 0; i < num_process; i++) {
+		// kill processes
 		kill(processes[i], SIGKILL);
 		wait(0);
 	}
@@ -57,10 +58,17 @@ void backgroundHandler()
 	{
 		int wstat;
 		pid_t pid;
+
+		/* wait for any child to change its state
+		 * WNOHANG: return immediately if there are no children to wait for
+		 * wstat: to store terminating status
+		 * rusage: resourse usage
+		 */
 		pid = wait3(&wstat, WNOHANG, (struct rusage *)NULL);
 
 		for (size_t i = 0; i < bg_processes; i++)
 		{
+			// if the process is background process, decrement bg_processes and 
 			if (bg_pid[i] == pid)
 			{
 				bg_processes--;
@@ -75,15 +83,17 @@ void backgroundHandler()
 int execute(char **commands, int bg, int parallel, int argCount) {
 	char *comm_args[argCount+1];
 	int status;
+
+	// store command arguments
 	for(int i=0; i < argCount; i++) {
 		comm_args[i] = commands[i];
-		// printf("%s ", comm_args[i]);
 	}
+
 	comm_args[argCount] = NULL;
-	// printf("%s", comm_args[0]);
 
 	int pid = fork();
 	if(pid == 0) {
+		// now set signal SIGINT to default
 		signal(SIGINT, SIG_DFL);
 		// setpgrp();
 
@@ -93,17 +103,15 @@ int execute(char **commands, int bg, int parallel, int argCount) {
 		};
 	} else if(pid) {
 		// setpgid(pid, pid);
-		if (parallel == 1) { // if parallel
+		if (parallel == 1) { // if process is parallel
 			process_pid[parallel_processes] = pid;
 			parallel_processes++;
 		}
-		else if (bg == 1)
-		{ // if background
+		else if (bg == 1) { // if process is background
 			bg_pid[bg_processes] = pid;
 			bg_processes++;
 		}
-		else
-		{ // if blocking, reap it before going ahead
+		else { // else, reap it before going ahead
 			waitpid(pid, &status, 0);
 			// wait(NULL);
 		}
@@ -112,7 +120,10 @@ int execute(char **commands, int bg, int parallel, int argCount) {
 
 
 int main(int argc, char* argv[]) {
+	// for signal SIGINT, ignore in the shell
 	signal(SIGINT, SIG_IGN);
+	
+	// for signal SIGCHLD, run the function backgroundHandler
 	signal(SIGCHLD, backgroundHandler);
 
 	char  line[MAX_INPUT_SIZE];            
@@ -189,12 +200,14 @@ int main(int argc, char* argv[]) {
 		
 		execute(linuxCommand, bg, parallel, argCount);
        
+	    // wait for all the parallel processes to finish
 	   	for (size_t i = 0; i < parallel_processes; i++) {
 			int status;
 			pid_t wpid = waitpid(process_pid[i], &status, 0);
 			parallel_processes--;
 			process_pid[i] = 0;
 		}
+		
 		waitpid(-1, 0, WNOHANG);
 
 		// Freeing the allocated memory	
