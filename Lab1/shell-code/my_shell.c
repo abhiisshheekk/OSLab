@@ -156,7 +156,7 @@ int main(int argc, char* argv[]) {
 
 		for(i=0; tokens[i] != NULL; i++){
 			if(strcmp(tokens[i], "cd") == 0) {
-				chdir(tokens[++i]);
+				if(chdir(tokens[++i]) < 0) printf("Shell: Incorrect Command\n");
 				continue;
 			}
 			else if(strcmp(tokens[i], "&") == 0) {
