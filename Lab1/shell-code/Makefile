@@ -1,4 +1,4 @@
-ash: my_shell.c
-	g++ -g $^ -o ash
+my_shell: my_shell.c
+	gcc -g $^ -o my_shell
 clean:
-	rm -f ash
+	rm -f my_shell
