@@ -73,7 +73,7 @@ void backgroundHandler()
 			{
 				bg_processes--;
 				printf("Shell: Background process finished \n");
-				bg_pid[i] = bg_pid[bg_processes];
+				bg_pid[i] = bg_pid[bg_processes+1];
 				break;
 			}
 		}
@@ -174,6 +174,7 @@ int main(int argc, char* argv[]) {
 				bg = 1;
 				execute(linuxCommand, bg, parallel, argCount);
 				argCount = 0;
+				bg = 0;
 			}
 			else if(strcmp(tokens[i], "&&") == 0) {
 				execute(linuxCommand, bg, parallel, argCount);
@@ -183,6 +184,7 @@ int main(int argc, char* argv[]) {
 				parallel = 1;
 				execute(linuxCommand, bg, parallel, argCount);
 				argCount = 0;
+				parallel = 0;
 			}
 			else if(strcmp(tokens[i], "exit") == 0) {
 				killProcesses(process_pid, parallel_processes);
