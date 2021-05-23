@@ -1,3 +1,8 @@
 Commands to run:-
-    Make script executable  :   chmod +x test-zem.sh
-    Execute                 :   ./test-zem.sh
+	for test-zem -
+	Compile : make test-zem
+	Run		: ./test-zem
+	
+	for test-toggle -
+    Compile : make test-toggle
+	Run		: ./test-toggle
