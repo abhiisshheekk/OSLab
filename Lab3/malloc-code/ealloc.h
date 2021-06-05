@@ -9,6 +9,9 @@
 
 //minimum allocation size
 #define MINALLOC 256
+#define AVAILABLE 16
+#define _INIT -1
+#define MAXPAGE 4
 
 // function declarations to support
 void init_alloc(void);
