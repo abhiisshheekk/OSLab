@@ -159,34 +159,36 @@ int simplefs_read(int fileHandle, char *buf, int nbytes){
 			++requiredDatablocks;
 	}
 
-	// Find the required data blocks
+	// find the required data blocks
 	int allocDatablock[requiredDatablocks];
 	int allocIndex = 0;
 	for (int i = startBlockIndex; allocIndex < requiredDatablocks; ++i)
 		allocDatablock[allocIndex++] = inode->direct_blocks[i];
 
-	// read data blocks
+	// read data blocks and store it to buf
 	char tempBuf[BLOCKSIZE];
-	int curr_dataBlock = inode->direct_blocks[startBlockIndex];
-	int curr_readSize = min(nbytes, startBlockCapacity);
+	int curDatablock = inode->direct_blocks[startBlockIndex];
+	int curReadsize = min(nbytes, startBlockCapacity);
 
-	simplefs_readDataBlock(curr_dataBlock, tempBuf);
-	bzero(tempBuf + curr_readSize, startBlockCapacity - curr_readSize);
+	// read the start block
+	simplefs_readDataBlock(curDatablock, tempBuf);
+	bzero(tempBuf + curReadsize, startBlockCapacity - curReadsize);
 	sprintf(buf, "%s", tempBuf + startBlockOffset);
-	buf += curr_readSize;
-	nbytes -= curr_readSize;
+	buf += curReadsize;
+	nbytes -= curReadsize;
 
+	// read data after start block till we read nbytes 
 	while (nbytes > 0) {
-		curr_dataBlock = inode->direct_blocks[++startBlockIndex];
-		curr_readSize = min(nbytes, BLOCKSIZE);
+		curDatablock = inode->direct_blocks[++startBlockIndex];
+		curReadsize = min(nbytes, BLOCKSIZE);
 
-		simplefs_readDataBlock(curr_dataBlock, tempBuf);
-		if (curr_readSize < BLOCKSIZE)
-			bzero(tempBuf + curr_readSize, BLOCKSIZE - curr_readSize);
+		simplefs_readDataBlock(curDatablock, tempBuf);
+		if (curReadsize < BLOCKSIZE)
+			bzero(tempBuf + curReadsize, BLOCKSIZE - curReadsize);
 		
 		sprintf(buf, "%s", tempBuf);
-		buf += curr_readSize;
-		nbytes -= curr_readSize;
+		buf += curReadsize;
+		nbytes -= curReadsize;
 	}
 
 	if (nbytes > 0)
@@ -203,21 +205,23 @@ int simplefs_write(int fileHandle, char *buf, int nbytes){
     /*
 	    write `nbytes` of data from `buf` to file pointed by `fileHandle` starting at current offset
 	*/
-
+	// check if the input data is in range
+	assert(0 <= fileHandle && fileHandle <= MAX_OPEN_FILES);
 	assert(nbytes > 0);
 
-	//Check overflow
+	// get inode number and offset of the file
 	int fileInode = file_handle_array[fileHandle].inode_number;
 	int fileOffset = file_handle_array[fileHandle].offset;
 
 	assert(fileOffset + nbytes <= MAX_FILE_SIZE * BLOCKSIZE);
 
-	//Calculate number of data blocks required
+	// calculate start index and offset of the datablock
 	int startBlockIndex = fileOffset / BLOCKSIZE;
 	int startBlockOffset = fileOffset % BLOCKSIZE;
 	int startBlockCapacity = BLOCKSIZE - startBlockOffset;
-	int requiredDatablocks = 1;
 
+	// calculate no of datablocks required to read nbytes
+	int requiredDatablocks = 1;
 	if (nbytes > startBlockCapacity) {
 		int left = nbytes - startBlockCapacity;
 		requiredDatablocks += left / BLOCKSIZE;
@@ -226,7 +230,7 @@ int simplefs_write(int fileHandle, char *buf, int nbytes){
 			++requiredDatablocks;
 	}
 
-	//Allocate required number of data blocks
+	// allocate required number of data blocks
 	struct superblock_t *superblock = (struct superblock_t *)malloc(sizeof(struct superblock_t));
 	struct inode_t *inode = (struct inode_t *)malloc(sizeof(struct inode_t));
 
@@ -259,52 +263,54 @@ int simplefs_write(int fileHandle, char *buf, int nbytes){
 	int save = nbytes;
 
 	allocIndex = 0;
-	int curr_dataBlock = allocDatablock[allocIndex];
-	int curr_WriteSize = min(nbytes, startBlockCapacity);
+	int curDatablock = allocDatablock[allocIndex];
+	int curwritesize = min(nbytes, startBlockCapacity);
 
-	//Writing first data block
+	// get data block to write to
 	if (inode->direct_blocks[startBlockIndex] == -1) {
 		bzero(tempBuf, BLOCKSIZE);
-		memcpy(tempBuf, buf, curr_WriteSize);
+		memcpy(tempBuf, buf, curwritesize);
 	}
 	else {
-		simplefs_readDataBlock(curr_dataBlock, tempBuf);
-		memcpy(tempBuf + startBlockOffset, buf, curr_WriteSize);
+		simplefs_readDataBlock(curDatablock, tempBuf);
+		memcpy(tempBuf + startBlockOffset, buf, curwritesize);
 	}
 
-	simplefs_writeDataBlock(curr_dataBlock, tempBuf);
-	buf += curr_WriteSize;
-	nbytes -= curr_WriteSize;
+	// write to the start data block
+	simplefs_writeDataBlock(curDatablock, tempBuf);
+	buf += curwritesize;
+	nbytes -= curwritesize;
 
-	//Writing subsequent blocks
+	// write remaining bytes to the data blocks
 	while (nbytes > 0) {
-		curr_dataBlock = allocDatablock[++allocIndex];
-		curr_WriteSize = min(nbytes, BLOCKSIZE);
+		curDatablock = allocDatablock[++allocIndex];
+		curwritesize = min(nbytes, BLOCKSIZE);
 
-		if (curr_WriteSize < BLOCKSIZE)	{
+		if (curwritesize < BLOCKSIZE)	{
 			if (inode->direct_blocks[startBlockIndex + allocIndex] == -1)
 				bzero(tempBuf, BLOCKSIZE);
 			else
-				simplefs_readDataBlock(curr_dataBlock, tempBuf);
+				simplefs_readDataBlock(curDatablock, tempBuf);
 		}
 
-		memcpy(tempBuf, buf, curr_WriteSize);
-		simplefs_writeDataBlock(curr_dataBlock, tempBuf);
-		buf += curr_WriteSize;
-		nbytes -= curr_WriteSize;
+		memcpy(tempBuf, buf, curwritesize);
+		simplefs_writeDataBlock(curDatablock, tempBuf);
+		buf += curwritesize;
+		nbytes -= curwritesize;
 	}
 
 	if (buf[0] != '\0' || nbytes > 0)
 		return -1;
 
-	//Update Inode & file handle
+	// update the file size
 	inode->file_size = max(inode->file_size, fileOffset + save);
 
+	// update the datablocks updated in inode information
 	allocIndex = 0;
 	for (int i = startBlockIndex; allocIndex < requiredDatablocks; ++i)
 		inode->direct_blocks[i] = allocDatablock[allocIndex++];
 
-	//Push changes to disk
+	// write changes to the super block and inode
 	simplefs_writeSuperBlock(superblock);
 	simplefs_writeInode(fileInode, inode);
 
@@ -324,12 +330,14 @@ int simplefs_seek(int fileHandle, int nseek){
 	int fileInode = file_handle_array[fileHandle].inode_number;
 	int fileOffset = file_handle_array[fileHandle].offset;
 
+	// get inode from the inode number of file
 	simplefs_readInode(fileInode, inode);
 
 	fileOffset += nseek;
 	if (fileOffset < 0 || inode->file_size < fileOffset)
 		return -1;
 
+	// update the offset of the file 
 	file_handle_array[fileHandle].offset = fileOffset;
 
 	free(inode);
