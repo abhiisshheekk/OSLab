@@ -49,6 +49,8 @@ struct filehandle_t
 
 void simplefs_formatDisk();
 int simplefs_allocInode();
+void simplefs_readSuperBlock(struct superblock_t *superblock);
+void simplefs_writeSuperBlock(struct superblock_t *superblock);
 void simplefs_freeInode(int inodenum);
 void simplefs_readInode(int inodenum, struct inode_t *inodeptr);
 void simplefs_writeInode(int inodenum, struct inode_t *inodeptr); 
