@@ -1,19 +1,24 @@
 #include "simplefs-ops.h"
+#define max(x,y) ( { __auto_type __x = (x); __auto_type __y = (y); __x > __y ? __x : __y; } )
+#define min(x,y) ( { __auto_type __x = (x); __auto_type __y = (y); __x < __y ? __x : __y; } )
+
 extern struct filehandle_t file_handle_array[MAX_OPEN_FILES]; // Array for storing opened files
 
 int simplefs_create(char *filename){
     /*
 	    Create file with name `filename` from disk
 	*/
-	// search file
+	// search file with name `filename`
 	int inodeNum = search_file(filename);
 
-	if (inodeNum < 0)	{
+	if (inodeNum == -1)	{
 		// allocate inode
 		inodeNum = simplefs_allocInode();
 
-		// if allocation is successful
-		if (inodeNum > 0) {
+		// unsuccessful inode allocation
+		if (inodeNum == -1)
+			return -1;
+		else {
 			struct inode_t *inodePtr = (struct inode_t *)malloc(sizeof(struct inode_t));
 			
 			// read allocated inode
@@ -30,11 +35,7 @@ int simplefs_create(char *filename){
 			// free inodePtr
 			free(inodePtr);
 		}
-		// unsuccessful inode allocation
-		else
-			return -1;
 	}
-	// file already exists with name `filename`
 	else
 		return -1;
 
@@ -49,7 +50,7 @@ void simplefs_delete(char *filename){
 	// search file and get its inode number
 	int inodeNum = search_file(filename);
 
-	if (inodeNum > 0)	{
+	if (inodeNum != -1)	{
 		// get inode information of the inode number obtained
 		struct inode_t *inode = (struct inode_t *)malloc(sizeof(struct inode_t));
 		simplefs_readInode(inodeNum, inode);
@@ -64,10 +65,10 @@ void simplefs_delete(char *filename){
 
 		for (int i = 0; i < MAX_FILE_SIZE; i++)	{
 			// free all the datablocks in use and update the direct_blocks and datablock_freelist
-			if (inode->direct_blocks[i] > 0) {
-				int block_Num = inode->direct_blocks[i];
-				assert(superblock->datablock_freelist[block_Num] == DATA_BLOCK_USED);
-				superblock->datablock_freelist[block_Num] = DATA_BLOCK_FREE;
+			if (inode->direct_blocks[i] != -1) {
+				int blockNum = inode->direct_blocks[i];
+				assert(superblock->datablock_freelist[blockNum] == DATA_BLOCK_USED);
+				superblock->datablock_freelist[blockNum] = DATA_BLOCK_FREE;
 				inode->direct_blocks[i] = -1;
 			}
 		}
@@ -93,7 +94,10 @@ int simplefs_open(char *filename){
 	// search file and get its inode number
 	int inodeNum = search_file(filename);
 
-	if (inodeNum > 0) {
+	// if file does not exist
+	if (inodeNum == -1)
+		return -1;
+	else {
 		// if the inode number of the file is already in the file handle array, return that entry index
 		for (int i = 0; i < MAX_OPEN_FILES; i++) {
 			if (file_handle_array[i].inode_number == inodeNum)
@@ -102,15 +106,12 @@ int simplefs_open(char *filename){
 
 		// if the file is accessed for the first time, allocate an unused file handle entry
 		for (int i = 0; i < MAX_OPEN_FILES; i++) {
-			if (file_handle_array[i].inode_number < 0) {
+			if (file_handle_array[i].inode_number == -1) {
 				file_handle_array[i].inode_number = inodeNum;
 				return i;
 			}
 		}
 	}
-	// if file does not exist
-	else
-		return -1;
 
     return -1;
 }
@@ -206,7 +207,6 @@ int simplefs_write(int fileHandle, char *buf, int nbytes){
 	    write `nbytes` of data from `buf` to file pointed by `fileHandle` starting at current offset
 	*/
 	// check if the input data is in range
-	assert(0 <= fileHandle && fileHandle <= MAX_OPEN_FILES);
 	assert(nbytes > 0);
 
 	// get inode number and offset of the file
@@ -237,7 +237,7 @@ int simplefs_write(int fileHandle, char *buf, int nbytes){
 	simplefs_readSuperBlock(superblock);
 	simplefs_readInode(fileInode, inode);
 
-	//Fulfill requirement from aleady allocated Inode direct blocks
+	// get data blocks to write to from inode direct blocks
 	int allocDatablock[requiredDatablocks];
 	int allocIndex = 0;
 	for (int i = startBlockIndex; allocIndex < requiredDatablocks; ++i) {
@@ -247,7 +247,7 @@ int simplefs_write(int fileHandle, char *buf, int nbytes){
 			allocDatablock[allocIndex++] = inode->direct_blocks[i];
 	}
 
-	//Fulfill requirement from data block free list
+	// get data blocks to write to from datablock freelist
 	for (int i = 0; allocIndex < requiredDatablocks && i < NUM_DATA_BLOCKS; i++) {
 		if (superblock->datablock_freelist[i] == DATA_BLOCK_FREE) {
 			superblock->datablock_freelist[i] = DATA_BLOCK_USED;
@@ -258,7 +258,6 @@ int simplefs_write(int fileHandle, char *buf, int nbytes){
 	if (allocIndex != requiredDatablocks)
 		return -1;
 
-	//Write data blocks
 	char tempBuf[BLOCKSIZE];
 	int save = nbytes;
 
@@ -317,7 +316,7 @@ int simplefs_write(int fileHandle, char *buf, int nbytes){
 	free(superblock);
 	free(inode);
 
-    return -1;
+    return 0;
 }
 
 
@@ -342,7 +341,7 @@ int simplefs_seek(int fileHandle, int nseek){
 
 	free(inode);
 
-    return -1;
+    return 0;
 }
 
 int search_file(char *filename) {
@@ -358,4 +357,5 @@ int search_file(char *filename) {
 	}
 
 	free(inode);
+	return -1;
 }

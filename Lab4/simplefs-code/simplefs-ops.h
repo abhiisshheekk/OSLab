@@ -11,3 +11,4 @@ void simplefs_close(int file_handle);
 int simplefs_read(int file_handle, char *buf, int nbytes);
 int simplefs_write(int file_handle, char *buf, int nbytes);
 int simplefs_seek(int file_handle, int nseek);
+int search_file(char *filename);
